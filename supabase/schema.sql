@@ -93,8 +93,8 @@ create table order_items (
 -- ------------------------------------------------------------
 create table site_settings (
   id uuid primary key default uuid_generate_v4(),
-  shop_name text not null default 'Sope Naby',
-  seller_name text not null default 'Adama',
+  shop_name text not null default 'Beauté bio by Gnilane',
+  seller_name text not null default 'Gnilane',
   whatsapp_number text not null default '',
   wave_number text not null default '',
   wave_name text not null default '',
@@ -104,7 +104,7 @@ create table site_settings (
   hero_image_url text
 );
 
-insert into site_settings (shop_name, seller_name) values ('Sope Naby', 'Adama');
+insert into site_settings (shop_name, seller_name) values ('Beauté bio by Gnilane', 'Gnilane');
 
 -- ============================================================
 -- ROW LEVEL SECURITY

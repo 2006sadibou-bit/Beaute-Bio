@@ -44,7 +44,7 @@ export default function PaiementSuccesPage() {
         </p>
 
         <h1 className="mt-3 font-serif text-4xl text-[#18233b]">
-          Merci Adama ❤️
+          Merci Gnilane ❤️
         </h1>
 
         <p className="mx-auto mt-5 max-w-md text-sm leading-7 text-[#68748b]">

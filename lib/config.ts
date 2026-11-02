@@ -2,10 +2,10 @@
 // Configuration centrale du site.
 
 export const siteConfig = {
-  shopName: "Sope Naby",
-  sellerName: "Adama",
+  shopName: "Beauté bio by Gnilane",
+  sellerName: "Gnilane",
 
-  whatsappNumber: "221776811311",
+  whatsappNumber: "783674719",
 
   wavePaymentLink:
     "https://pay.wave.com/m/M_sn_QAGBdcO8TG-6/c/sn/",

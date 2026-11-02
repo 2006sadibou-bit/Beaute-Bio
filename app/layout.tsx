@@ -3,8 +3,8 @@ import "./globals.css";
 import { CartProvider } from "@/lib/cart-context";
 
 export const metadata: Metadata = {
-  title: "Sope Naby",
-  description: "Parfums, savons, huiles et tiouraye sélectionnés par Sope Naby.",
+  title: "Beaute-bio",
+  description: "Parfums, savons, huiles et tiouraye sélectionnés par Beaute-bio.",
   icons: {
     icon: "/logo.jpg",
     shortcut: "/logo.jpg",

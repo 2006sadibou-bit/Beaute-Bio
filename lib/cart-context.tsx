@@ -20,7 +20,7 @@ type CartContextType = {
 
 const CartContext = createContext<CartContextType | null>(null);
 
-const CART_KEY = "sope-naby-cart";
+const CART_KEY = "Beaute-bio-cart";
 
 export function CartProvider({
   children,

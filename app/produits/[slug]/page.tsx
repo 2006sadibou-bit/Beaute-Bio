@@ -1,7 +1,7 @@
 
 import { getProductBySlug } from "@/lib/products";
 import { siteConfig, buildWhatsAppLink } from "@/lib/config";
-import AddToCartButton from "@/components/AddToCartButton";
+
 import Image from "next/image";
 import { notFound } from "next/navigation";
 
@@ -72,10 +72,6 @@ export default async function ProductDetailPage({
             <span className="text-red-600">Rupture de stock</span>
           )}
         </p>
-
-        <div className="flex gap-3 mb-3">
-          <AddToCartButton product={product} />
-        </div>
 
         <a
           href={whatsappLink}

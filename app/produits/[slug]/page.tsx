@@ -1,8 +1,6 @@
 
 import { getProductBySlug } from "@/lib/products";
-import { siteConfig, buildWhatsAppLink } from "@/lib/config";
-import AddToCartButton from "@/components/AddToCartButton";
-import Image from "next/image";
+import { siteConfig, buildWhatsAppLink } from "@/lib/config";import Image from "next/image";
 import { notFound } from "next/navigation";
 
 type ProductDetailPageProps = {
@@ -73,10 +71,7 @@ export default async function ProductDetailPage({
           )}
         </p>
 
-        <div className="flex gap-3 mb-3">
-          <AddToCartButton product={product} />
-        </div>
-
+      
         <a
           href={whatsappLink}
           target="_blank"

@@ -272,25 +272,23 @@ export default function ProduitsPage() {
       {/* HEADER */}
       <header className="sticky top-0 z-40 border-b border-[#D3E8D9] bg-white/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-          {/* Logo + nom : 5 clics rapides = espace privé de Gnilane */}
-          <div
-            onClick={handleLogoClick}
-            className="flex cursor-default select-none items-center gap-3"
-          >
+          <div className="flex items-center gap-3">
+            {/* Logo : 5 clics rapides = espace privé de Gnilane */}
             <img
               src="/logo.jpg"
               alt="Logo Beauté Bio by Gnilane"
               draggable={false}
-              className="h-12 w-12 rounded-full border-2 border-[#D4AF37] bg-white object-contain p-0.5 shadow-lg"
+              onClick={handleLogoClick}
+              className="h-12 w-12 cursor-default select-none rounded-full border-2 border-[#D4AF37] bg-white object-contain p-0.5 shadow-lg"
             />
-            <div>
+            <Link href="/">
               <p className="font-serif text-lg font-bold text-[#1B4332] sm:text-xl">
                 Beauté Bio
               </p>
               <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[#2D6A4F]">
                 By Gnilane
               </p>
-            </div>
+            </Link>
           </div>
 
           <div className="flex items-center gap-3">
@@ -382,16 +380,16 @@ export default function ProduitsPage() {
                     onClick={() => setActiveCategory(category)}
                     aria-pressed={active}
                     className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition ${active
-                      ? "border-2 border-[#D4AF37] bg-[#2D6A4F] text-white shadow-md"
-                      : "border-2 border-[#D3E8D9] bg-white text-[#4A5F54] hover:border-[#2D6A4F] hover:text-[#2D6A4F]"
+                        ? "border-2 border-[#D4AF37] bg-[#2D6A4F] text-white shadow-md"
+                        : "border-2 border-[#D3E8D9] bg-white text-[#4A5F54] hover:border-[#2D6A4F] hover:text-[#2D6A4F]"
                       }`}
                   >
                     <span>{categoryIcons[category]}</span>
                     {category}
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-bold ${active
-                        ? "bg-white/25 text-white"
-                        : "bg-[#E3F3E8] text-[#1B4332]"
+                          ? "bg-white/25 text-white"
+                          : "bg-[#E3F3E8] text-[#1B4332]"
                         }`}
                     >
                       {getCategoryCount(category)}
@@ -477,10 +475,10 @@ export default function ProduitsPage() {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
                       <span
                         className={`absolute left-3 top-3 rounded-full px-3 py-1.5 text-[11px] font-bold shadow-sm ${onOrder
-                          ? "bg-[#FFF3CD] text-[#805B00]"
-                          : product.stock
-                            ? "bg-white text-[#2E7D32]"
-                            : "bg-red-100 text-red-700"
+                            ? "bg-[#FFF3CD] text-[#805B00]"
+                            : product.stock
+                              ? "bg-white text-[#2E7D32]"
+                              : "bg-red-100 text-red-700"
                           }`}
                       >
                         {onOrder
@@ -527,10 +525,10 @@ export default function ProduitsPage() {
                           onClick={() => addToCart(product)}
                           disabled={!product.stock}
                           className={`mt-4 flex w-full items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-bold text-white shadow-md transition ${!product.stock
-                            ? "cursor-not-allowed bg-gray-400"
-                            : isAdded
-                              ? "bg-[#40916C]"
-                              : "bg-[#2D6A4F] hover:bg-[#1B4332]"
+                              ? "cursor-not-allowed bg-gray-400"
+                              : isAdded
+                                ? "bg-[#40916C]"
+                                : "bg-[#2D6A4F] hover:bg-[#1B4332]"
                             }`}
                         >
                           {isAdded ? "Ajouté au panier ✓" : "＋ Ajouter au panier"}
@@ -541,8 +539,8 @@ export default function ProduitsPage() {
                           onClick={() => buyNow(product)}
                           disabled={!product.stock}
                           className={`mt-2 flex w-full items-center justify-center gap-2 rounded-full border-2 px-4 py-3 text-sm font-bold shadow-sm transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 ${onOrder
-                            ? "border-[#D4AF37] bg-[#FFF6D9] text-[#805B00] hover:bg-[#FCE9A6]"
-                            : "border-[#D4AF37] bg-[#F4FAF5] text-[#1B4332] hover:bg-[#E3F3E8]"
+                              ? "border-[#D4AF37] bg-[#FFF6D9] text-[#805B00] hover:bg-[#FCE9A6]"
+                              : "border-[#D4AF37] bg-[#F4FAF5] text-[#1B4332] hover:bg-[#E3F3E8]"
                             }`}
                         >
                           {onOrder ? "Disponible sur commande" : "Acheter maintenant"}
@@ -723,8 +721,8 @@ export default function ProduitsPage() {
         onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
         aria-label="Retour en haut"
         className={`fixed bottom-24 right-6 z-50 flex h-11 w-11 items-center justify-center rounded-full border border-[#D4AF37] bg-white text-[#1B4332] shadow-lg transition ${showTop
-          ? "translate-y-0 opacity-100"
-          : "pointer-events-none translate-y-4 opacity-0"
+            ? "translate-y-0 opacity-100"
+            : "pointer-events-none translate-y-4 opacity-0"
           }`}
       >
         ↑

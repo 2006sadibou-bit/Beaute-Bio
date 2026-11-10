@@ -1,118 +1,192 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import {
-  verifyAdminToken,
-  ADMIN_COOKIE_NAME,
-} from "@/lib/conseil/admin-session";
+
 import { supabaseAdmin } from "@/lib/conseil/supabase-admin";
+import {
+  ADMIN_COOKIE_NAME,
+  verifyAdminToken,
+} from "@/lib/conseil/admin-session";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-function isAdmin() {
-  const token = cookies().get(ADMIN_COOKIE_NAME)?.value;
-  return verifyAdminToken(token);
+/* =========================================================
+   VÉRIFICATION ADMINISTRATEUR
+========================================================= */
+
+async function isAdminAuthenticated(): Promise<boolean> {
+  try {
+    const cookieStore = cookies();
+    const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value;
+
+    if (!token) return false;
+
+    return Boolean(await verifyAdminToken(token));
+  } catch (error) {
+    console.error("Erreur vérification administrateur :", error);
+    return false;
+  }
 }
+
+/* =========================================================
+   GET : PRODUITS PUBLICS ET PRODUITS ADMINISTRATEUR
+========================================================= */
 
 export async function GET() {
   try {
-    if (!isAdmin()) {
-      return NextResponse.json(
-        { error: "Accès refusé." },
-        { status: 401 }
-      );
+    const isAdmin = await isAdminAuthenticated();
+
+    let query = supabaseAdmin
+      .from("products")
+      .select(`
+        id,
+        name,
+        slug,
+        description,
+        price,
+        stock,
+        image_url,
+        category_id,
+        active,
+        created_at,
+        categories(name)
+      `)
+      .order("created_at", { ascending: false });
+
+    /*
+      ADMINISTRATEUR :
+      Tous les produits sont visibles, même les produits masqués.
+
+      VISITEUR PUBLIC :
+      Seuls les produits publiés sont visibles.
+    */
+
+    if (!isAdmin) {
+      query = query.eq("active", true);
     }
 
-    const [products, categories] = await Promise.all([
-      supabaseAdmin
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false }),
+    const { data, error } = await query;
 
-      supabaseAdmin
-        .from("categories")
-        .select("*")
-        .order("name"),
-    ]);
-
-    if (products.error || categories.error) {
-      console.error("ERREUR SUPABASE PRODUITS :", products.error);
-      console.error("ERREUR SUPABASE CATEGORIES :", categories.error);
+    if (error) {
+      console.error("ERREUR CHARGEMENT PRODUITS :", error);
 
       return NextResponse.json(
-        {
-          error: "Erreur de lecture Supabase.",
-          details: {
-            products: products.error?.message || null,
-            categories: categories.error?.message || null,
-          },
-        },
+        { error: "Impossible de charger les produits." },
         { status: 500 }
       );
     }
 
+    const products = (data ?? []).map((product: any) => ({
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+      description: product.description,
+      price: Number(product.price),
+      stock: Number(product.stock),
+      image_url: product.image_url,
+      category_id: product.category_id,
+      category: product.categories?.name || "Autres",
+      active: Boolean(product.active),
+      created_at: product.created_at,
+    }));
+
+    /*
+      Les catégories sont nécessaires au formulaire
+      d'ajout et de modification dans l'administration.
+    */
+
+    let categories: any[] = [];
+
+    if (isAdmin) {
+      const { data: categoryData, error: categoryError } =
+        await supabaseAdmin
+          .from("categories")
+          .select("id,name")
+          .order("name", { ascending: true });
+
+      if (categoryError) {
+        console.error(
+          "ERREUR CHARGEMENT CATÉGORIES :",
+          categoryError
+        );
+      } else {
+        categories = categoryData ?? [];
+      }
+    }
+
     return NextResponse.json({
-      products: products.data || [],
-      categories: categories.data || [],
+      products,
+      ...(isAdmin ? { categories } : {}),
     });
   } catch (error) {
     console.error("ERREUR API PRODUITS :", error);
 
     return NextResponse.json(
-      {
-        error: "Erreur interne.",
-        details:
-          error instanceof Error ? error.message : "Erreur inconnue.",
-      },
+      { error: "Une erreur interne est survenue." },
       { status: 500 }
     );
   }
 }
 
-export async function POST(request: NextRequest) {
+/* =========================================================
+   POST : AJOUTER UN PRODUIT
+========================================================= */
+
+export async function POST(request: Request) {
   try {
-    if (!isAdmin()) {
+    const isAdmin = await isAdminAuthenticated();
+
+    if (!isAdmin) {
       return NextResponse.json(
-        { error: "Accès refusé." },
+        { error: "Accès administrateur refusé." },
         { status: 401 }
       );
     }
 
     const body = await request.json();
 
-    const name = String(body.name ?? "").trim();
-    const slug = String(body.slug ?? "").trim();
-    const description = String(body.description ?? "").trim();
+    const name =
+      typeof body.name === "string" ? body.name.trim() : "";
+
+    const slug =
+      typeof body.slug === "string" ? body.slug.trim() : "";
+
     const price = Number(body.price);
     const stock = Number(body.stock);
-    const category_id = body.category_id || null;
-    const image_url = body.image_url || null;
 
-    if (
-      !name ||
-      !slug ||
-      !Number.isFinite(price) ||
-      price < 0 ||
-      !Number.isInteger(stock) ||
-      stock < 0
-    ) {
+    if (!name || !slug) {
       return NextResponse.json(
-        { error: "Informations du produit invalides." },
+        { error: "Le nom et l'identifiant du produit sont obligatoires." },
         { status: 400 }
       );
     }
 
+    if (
+      !Number.isFinite(price) ||
+      price < 0 ||
+      !Number.isFinite(stock) ||
+      stock < 0
+    ) {
+      return NextResponse.json(
+        { error: "Le prix ou le stock est invalide." },
+        { status: 400 }
+      );
+    }
+
+    const productData = {
+      name,
+      slug,
+      description: body.description || null,
+      price,
+      stock,
+      image_url: body.image_url || null,
+      category_id: body.category_id || null,
+      active: body.active !== false,
+    };
+
     const { data, error } = await supabaseAdmin
       .from("products")
-      .insert({
-        name,
-        slug,
-        description,
-        price,
-        stock,
-        category_id,
-        image_url,
-        active: body.active !== false,
-      })
+      .insert(productData)
       .select()
       .single();
 
@@ -120,21 +194,24 @@ export async function POST(request: NextRequest) {
       console.error("ERREUR AJOUT PRODUIT :", error);
 
       return NextResponse.json(
-        { error: error.message },
+        { error: error.message || "Impossible d'ajouter le produit." },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { product: data },
+      {
+        message: "Produit ajouté avec succès.",
+        product: data,
+      },
       { status: 201 }
     );
   } catch (error) {
-    console.error("ERREUR API AJOUT :", error);
+    console.error("ERREUR POST PRODUIT :", error);
 
     return NextResponse.json(
-      { error: "Requête invalide." },
-      { status: 400 }
+      { error: "Une erreur interne est survenue." },
+      { status: 500 }
     );
   }
 }

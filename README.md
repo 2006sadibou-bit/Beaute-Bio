@@ -1,4 +1,4 @@
-# Sope Naby — Étapes 1 à 7
+# Beaute-bio — Étapes 1 à 7
 
 Ce dossier contient :
 - La structure de base du projet Next.js (TypeScript + Tailwind)

@@ -4,7 +4,7 @@ import { CartProvider } from "@/lib/cart-context";
 
 export const metadata: Metadata = {
   title: "Beaute-bio",
-  description: "Parfums, savons, huiles et tiouraye sélectionnés par Beaute-bio.",
+  description: "Savons,huiles,crèmes .... sélectionnés par Gnilane.",
   icons: {
     icon: "/logo.jpg",
     shortcut: "/logo.jpg",

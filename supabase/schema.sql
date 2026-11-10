@@ -1,5 +1,5 @@
 -- ============================================================
--- SOPE NABY - Schéma Supabase
+-- Beaute-bio - Schéma Supabase
 -- À exécuter dans Supabase > SQL Editor (en une fois)
 -- ============================================================
 

@@ -1,5 +1,5 @@
 -- ============================================================
--- SOPE NABY - Storage (images produits)
+-- Beaute-bio - Storage (images produits)
 -- À exécuter APRÈS schema.sql, dans Supabase > SQL Editor
 -- ============================================================
 

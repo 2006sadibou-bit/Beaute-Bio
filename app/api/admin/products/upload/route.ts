@@ -1,10 +1,12 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { randomUUID } from "node:crypto";
+
 import {
   ADMIN_COOKIE_NAME,
   verifyAdminToken,
 } from "@/lib/conseil/admin-session";
+
 import { supabaseAdmin } from "@/lib/conseil/supabase-admin";
 
 export const runtime = "nodejs";
@@ -44,8 +46,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const allowedExtensions = ["jpg", "jpeg", "png", "webp", "gif"];
+    const extension =
+      file.name.split(".").pop()?.toLowerCase() || "jpg";
+
+    const allowedExtensions = [
+      "jpg",
+      "jpeg",
+      "png",
+      "webp",
+      "gif",
+    ];
 
     if (!allowedExtensions.includes(extension)) {
       return NextResponse.json(
@@ -55,6 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     const path = `products/${randomUUID()}.${extension}`;
+
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const { error: uploadError } = await supabaseAdmin.storage
@@ -68,7 +79,9 @@ export async function POST(request: NextRequest) {
       console.error("ERREUR UPLOAD PHOTO :", uploadError);
 
       return NextResponse.json(
-        { error: "Envoi impossible : " + uploadError.message },
+        {
+          error: "Envoi impossible : " + uploadError.message,
+        },
         { status: 500 }
       );
     }
@@ -85,7 +98,9 @@ export async function POST(request: NextRequest) {
     console.error("ERREUR API UPLOAD :", error);
 
     return NextResponse.json(
-      { error: "Erreur interne pendant l'envoi de la photo." },
+      {
+        error: "Erreur interne pendant l'envoi de la photo.",
+      },
       { status: 500 }
     );
   }

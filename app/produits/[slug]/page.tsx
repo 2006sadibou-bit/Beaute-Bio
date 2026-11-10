@@ -83,5 +83,5 @@ export default async function ProductDetailPage({
         </a>
       </div>
     </main>
-  );
+  )
 }

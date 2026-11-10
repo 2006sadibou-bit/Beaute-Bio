@@ -1,11 +1,21 @@
 ﻿"use client";
 
 import {
+  useCallback,
   useEffect,
   useState,
-  type FormEvent,
   type ChangeEvent,
+  type FormEvent,
 } from "react";
+
+/* =========================================================
+   TYPES
+========================================================= */
+
+type Category = {
+  id: string;
+  name: string;
+};
 
 type Product = {
   id: string;
@@ -16,15 +26,33 @@ type Product = {
   stock: number;
   image_url: string | null;
   category_id: string | null;
+  category?: string | null;
+  active: boolean;
+  created_at?: string;
+};
+
+type ProductForm = {
+  name: string;
+  slug: string;
+  description: string;
+  price: string;
+  stock: string;
+  image_url: string;
+  category_id: string;
   active: boolean;
 };
 
-type Category = {
-  id: string;
-  name: string;
+type ApiResponse = {
+  products?: Product[];
+  categories?: Category[];
+  product?: Product;
+  error?: string;
+  message?: string;
+  warning?: string;
+  photo_deleted?: boolean;
 };
 
-const emptyForm = {
+const emptyForm: ProductForm = {
   name: "",
   slug: "",
   description: "",
@@ -35,70 +63,122 @@ const emptyForm = {
   active: true,
 };
 
-// =====================================================
-// STYLES PARTAGÉS (design uniquement)
-// Vert bio : #2E7D32 (principal) · #1B5E20 (foncé) · #F1F8F2 (fond doux)
-// text-base = pas de zoom automatique sur iPhone
-// Les flèches haut/bas des champs nombre et de la liste sont retirées
-// =====================================================
+/* =========================================================
+   STYLES
+========================================================= */
 
-const inputClass =
-  "w-full min-h-[48px] appearance-none rounded-xl border border-[#CFE3D1] bg-white px-4 py-3 text-base text-gray-800 outline-none placeholder:text-gray-400 focus:border-[#2E7D32] focus:ring-2 focus:ring-[#C8E6C9]";
+const inputStyle =
+  "w-full rounded-xl border border-green-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-green-600 focus:ring-2 focus:ring-green-100";
 
-const noSpinClass =
-  "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+const labelStyle =
+  "mb-2 block text-sm font-semibold text-gray-700";
 
-const labelClass = "mb-1.5 block text-sm font-semibold text-[#1B5E20]";
+const buttonPrimary =
+  "inline-flex items-center justify-center rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50";
+
+const buttonSecondary =
+  "inline-flex items-center justify-center rounded-xl border border-green-200 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50";
+
+/* =========================================================
+   PAGE ADMIN PRODUITS
+========================================================= */
 
 export default function AdminProduitsPage() {
   const [connected, setConnected] = useState(false);
   const [pin, setPin] = useState("");
+
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [form, setForm] = useState<ProductForm>(emptyForm);
+
   const [message, setMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
   const [loading, setLoading] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [deletingPhoto, setDeletingPhoto] = useState(false);
+
   const [imagePreview, setImagePreview] = useState("");
-  const [form, setForm] = useState(emptyForm);
 
-  // =====================================================
-  // CHARGEMENT DES PRODUITS
-  // =====================================================
+  const [search, setSearch] = useState("");
 
-  async function loadProducts() {
+  /* =======================================================
+     NOTIFICATIONS
+  ======================================================= */
+
+  const showMessage = (text: string) => {
+    setMessage(text);
+    setErrorMessage("");
+  };
+
+  const showError = (text: string) => {
+    setErrorMessage(text);
+    setMessage("");
+  };
+
+  /* =======================================================
+     CHARGEMENT DES PRODUITS ET CATÉGORIES
+  ======================================================= */
+
+  const loadProducts = useCallback(async () => {
+    setLoadingProducts(true);
+
     try {
-      const response = await fetch("/api/admin/products");
-      const data = await response.json();
+      const response = await fetch("/api/admin/products", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = (await response.json()) as ApiResponse;
 
       if (!response.ok) {
-        setConnected(false);
-        setMessage(
-          data.details || data.error || "Session expirée."
+        throw new Error(
+          data.error || "Impossible de charger les produits."
         );
-        return;
       }
 
-      setProducts(data.products || []);
-      setCategories(data.categories || []);
-      setConnected(true);
-    } catch {
-      setMessage("Erreur de connexion au serveur.");
-    }
-  }
+      setProducts(Array.isArray(data.products) ? data.products : []);
 
-  useEffect(() => {
-    loadProducts();
+      if (Array.isArray(data.categories)) {
+        setCategories(data.categories);
+      }
+    } catch (error) {
+      console.error("Erreur chargement produits :", error);
+
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Une erreur est survenue pendant le chargement."
+      );
+    } finally {
+      setLoadingProducts(false);
+    }
   }, []);
 
-  // =====================================================
-  // CONNEXION ADMIN
-  // =====================================================
+  useEffect(() => {
+    if (connected) {
+      void loadProducts();
+    }
+  }, [connected, loadProducts]);
+
+  /* =======================================================
+     CONNEXION ADMINISTRATEUR
+  ======================================================= */
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (!pin.trim()) {
+      showError("Veuillez saisir votre code administrateur.");
+      return;
+    }
+
     setLoading(true);
+    setErrorMessage("");
     setMessage("");
 
     try {
@@ -113,220 +193,361 @@ export default function AdminProduitsPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(
-          data.details || data.error || "Code incorrect."
+        throw new Error(
+          data.error || "Code administrateur incorrect."
         );
-        return;
       }
 
+      setConnected(true);
       setPin("");
+      showMessage("Connexion réussie.");
+
       await loadProducts();
-    } catch {
-      setMessage("Erreur de connexion.");
+    } catch (error) {
+      console.error("Erreur connexion admin :", error);
+
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Impossible de se connecter."
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  // =====================================================
-  // APERÇU LOCAL DE LA PHOTO
-  // =====================================================
+  /* =======================================================
+     MODIFICATION DU FORMULAIRE
+  ======================================================= */
 
-  function readImagePreview(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          resolve(reader.result);
-        } else {
-          reject(new Error("Lecture de la photo impossible."));
-        }
-      };
-
-      reader.onerror = () => {
-        reject(new Error("Impossible de lire cette image."));
-      };
-
-      reader.readAsDataURL(file);
-    });
+  function updateForm<K extends keyof ProductForm>(
+    field: K,
+    value: ProductForm[K]
+  ) {
+    setForm((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
   }
 
-  // =====================================================
-  // ENVOI DE LA PHOTO VERS SUPABASE
-  // =====================================================
+  function createSlug(value: string) {
+    return value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
 
-  async function uploadImage(
-    event: ChangeEvent<HTMLInputElement>
-  ) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
+  /* =======================================================
+     SÉLECTION D'UNE IMAGE
+  ======================================================= */
+
+  async function uploadImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
 
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setMessage("Choisis un fichier image valide.");
-      input.value = "";
+      showError("Veuillez sélectionner une image valide.");
+      event.target.value = "";
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setMessage("La photo ne doit pas dépasser 5 Mo.");
-      input.value = "";
+      showError("L'image ne doit pas dépasser 5 Mo.");
+      event.target.value = "";
       return;
     }
 
     setUploadingImage(true);
-    setMessage("Préparation de la photo...");
+    setErrorMessage("");
+    setMessage("");
 
     try {
-      // 1. Afficher immédiatement une vraie prévisualisation.
-      const preview = await readImagePreview(file);
-
-      setImagePreview(preview);
-
-      // 2. Envoyer le fichier à l'API.
-      setMessage("Envoi de la photo vers Supabase...");
-
       const formData = new FormData();
       formData.append("file", file);
 
+      const response = await fetch("/api/admin/products/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Impossible de télécharger l'image."
+        );
+      }
+
+      if (!data.url) {
+        throw new Error("Le serveur n'a pas retourné l'adresse de l'image.");
+      }
+
+      setForm((previous) => ({
+        ...previous,
+        image_url: data.url,
+      }));
+
+      setImagePreview(data.url);
+
+      showMessage("Image téléchargée avec succès.");
+    } catch (error) {
+      console.error("Erreur upload image :", error);
+
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Erreur pendant le téléchargement de l'image."
+      );
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  }
+
+  /* =======================================================
+     RETIRER LA PHOTO SANS SUPPRIMER LE PRODUIT
+  ======================================================= */
+
+  async function removePhoto() {
+    if (deletingPhoto || uploadingImage) return;
+
+    if (!form.image_url && !imagePreview) {
+      showError("Ce produit ne possède aucune photo.");
+      return;
+    }
+
+    /*
+      Nouveau produit :
+      la photo n'est pas encore associée à un produit enregistré.
+      On retire simplement la sélection du formulaire.
+    */
+
+    if (!editingId) {
+      setForm((previous) => ({
+        ...previous,
+        image_url: "",
+      }));
+
+      setImagePreview("");
+
+      showMessage(
+        "Photo retirée du formulaire. Le produit n'a pas été supprimé."
+      );
+
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Voulez-vous vraiment supprimer cette photo ? Le produit et ses autres informations seront conservés."
+    );
+
+    if (!confirmed) return;
+
+    setDeletingPhoto(true);
+    setErrorMessage("");
+    setMessage("");
+
+    try {
       const response = await fetch(
-        "/api/admin/products/upload",
+        `/api/admin/products/${encodeURIComponent(editingId)}`,
         {
-          method: "POST",
-          body: formData,
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            image_url: null,
+          }),
         }
       );
 
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(
-          data.error || "Impossible d'envoyer la photo."
+        throw new Error(
+          data.error || "Impossible de supprimer la photo."
         );
-
-        // On conserve l'aperçu local même en cas d'erreur.
-        return;
       }
 
-      if (!data.image_url) {
-        setMessage(
-          "La photo a été envoyée, mais son adresse est introuvable."
-        );
-        return;
-      }
+      /*
+        On ne supprime pas le produit.
+        Seul son champ image_url est vidé.
+      */
 
-      // 3. Enregistrer l'adresse publique de la photo.
       setForm((previous) => ({
         ...previous,
-        image_url: data.image_url,
+        image_url: "",
       }));
 
-      // 4. Remplacer l'aperçu local par l'image Supabase.
-      setImagePreview(data.image_url);
+      setImagePreview("");
 
-      setMessage("Photo envoyée avec succès !");
+      setProducts((previous) =>
+        previous.map((product) =>
+          product.id === editingId
+            ? {
+              ...product,
+              image_url: null,
+            }
+            : product
+        )
+      );
+
+      if (data.warning) {
+        showError(data.warning);
+      } else {
+        showMessage(
+          data.message || "Photo supprimée avec succès."
+        );
+      }
+
+      await loadProducts();
     } catch (error) {
-      console.error("Erreur photo :", error);
+      console.error("Erreur suppression photo :", error);
 
-      setMessage(
-        "Erreur pendant la lecture ou l'envoi de la photo."
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Une erreur est survenue pendant la suppression de la photo."
       );
     } finally {
-      setUploadingImage(false);
-      input.value = "";
+      setDeletingPhoto(false);
     }
   }
 
-  // =====================================================
-  // ENREGISTREMENT DU PRODUIT
-  // =====================================================
+  /* =======================================================
+     RÉINITIALISER LE FORMULAIRE
+  ======================================================= */
 
-  async function saveProduct(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  function resetForm() {
+    setForm(emptyForm);
+    setImagePreview("");
+    setEditingId(null);
+    setMessage("");
+    setErrorMessage("");
+  }
+
+  /* =======================================================
+     AJOUTER OU MODIFIER UN PRODUIT
+  ======================================================= */
+
+  async function saveProduct(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (uploadingImage) {
-      setMessage("Attends la fin de l'envoi de la photo.");
+    if (loading || uploadingImage || deletingPhoto) return;
+
+    const name = form.name.trim();
+    const price = Number(form.price);
+    const stock = Number(form.stock);
+
+    if (!name) {
+      showError("Veuillez saisir le nom du produit.");
       return;
     }
 
-    if (imagePreview && !form.image_url) {
-      setMessage(
-        "La photo est encore sur ton ordinateur. Réessaie son envoi avant d'enregistrer."
-      );
+    if (!Number.isFinite(price) || price < 0) {
+      showError("Veuillez saisir un prix valide.");
+      return;
+    }
+
+    if (!Number.isFinite(stock) || stock < 0) {
+      showError("Veuillez saisir une quantité de stock valide.");
+      return;
+    }
+
+    const slug = form.slug.trim() || createSlug(name);
+
+    if (!slug) {
+      showError("Impossible de générer le lien du produit.");
       return;
     }
 
     setLoading(true);
     setMessage("");
-
-    const payload = {
-      ...form,
-      price: Number(form.price),
-      stock: Number(form.stock),
-      category_id: form.category_id || null,
-    };
+    setErrorMessage("");
 
     try {
-      const response = await fetch(
-        editingId
-          ? `/api/admin/products/${editingId}`
-          : "/api/admin/products",
-        {
-          method: editingId ? "PATCH" : "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      const payload = {
+        name,
+        slug,
+        description: form.description.trim() || null,
+        price,
+        stock,
+        image_url: form.image_url.trim() || null,
+        category_id: form.category_id || null,
+        active: form.active,
+      };
+
+      const url = editingId
+        ? `/api/admin/products/${encodeURIComponent(editingId)}`
+        : "/api/admin/products";
+
+      const response = await fetch(url, {
+        method: editingId ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(
-          data.error || "Enregistrement impossible."
+        throw new Error(
+          data.error ||
+          (editingId
+            ? "Impossible de modifier le produit."
+            : "Impossible d'ajouter le produit.")
         );
-        return;
       }
 
-      setMessage("Produit enregistré avec succès !");
+      showMessage(
+        editingId
+          ? "Produit modifié avec succès."
+          : "Produit ajouté avec succès."
+      );
 
-      setForm(emptyForm);
-      setImagePreview("");
-      setEditingId(null);
+      resetForm();
 
       await loadProducts();
-    } catch {
-      setMessage("Erreur lors de l'enregistrement.");
+    } catch (error) {
+      console.error("Erreur enregistrement produit :", error);
+
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Une erreur est survenue pendant l'enregistrement."
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  // =====================================================
-  // MODIFICATION D'UN PRODUIT
-  // =====================================================
+  /* =======================================================
+     MODIFIER UN PRODUIT
+  ======================================================= */
 
   function editProduct(product: Product) {
     setEditingId(product.id);
 
     setForm({
-      name: product.name,
-      slug: product.slug,
+      name: product.name || "",
+      slug: product.slug || "",
       description: product.description || "",
-      price: String(product.price),
-      stock: String(product.stock),
+      price: String(product.price ?? ""),
+      stock: String(product.stock ?? 0),
       image_url: product.image_url || "",
       category_id: product.category_id || "",
-      active: product.active,
+      active: product.active ?? true,
     });
 
     setImagePreview(product.image_url || "");
+
     setMessage("");
+    setErrorMessage("");
 
     window.scrollTo({
       top: 0,
@@ -334,29 +555,24 @@ export default function AdminProduitsPage() {
     });
   }
 
-  // =====================================================
-  // ANNULER LA MODIFICATION
-  // =====================================================
+  /* =======================================================
+     SUPPRIMER UN PRODUIT
+  ======================================================= */
 
-  function cancelEditing() {
-    setEditingId(null);
-    setForm(emptyForm);
-    setImagePreview("");
+  async function deleteProduct(product: Product) {
+    const confirmed = window.confirm(
+      `Voulez-vous vraiment supprimer le produit "${product.name}" ? Cette action est irréversible.`
+    );
+
+    if (!confirmed) return;
+
+    setLoading(true);
     setMessage("");
-  }
-
-  // =====================================================
-  // SUPPRIMER UN PRODUIT
-  // =====================================================
-
-  async function deleteProduct(id: string) {
-    if (!confirm("Voulez-vous vraiment supprimer ce produit ?")) {
-      return;
-    }
+    setErrorMessage("");
 
     try {
       const response = await fetch(
-        `/api/admin/products/${id}`,
+        `/api/admin/products/${encodeURIComponent(product.id)}`,
         {
           method: "DELETE",
         }
@@ -365,28 +581,43 @@ export default function AdminProduitsPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(
-          data.error || "Suppression impossible."
+        throw new Error(
+          data.error || "Impossible de supprimer ce produit."
         );
-        return;
       }
 
-      setMessage("Produit supprimé avec succès.");
+      if (editingId === product.id) {
+        resetForm();
+      }
+
+      showMessage("Produit supprimé avec succès.");
 
       await loadProducts();
-    } catch {
-      setMessage("Erreur pendant la suppression.");
+    } catch (error) {
+      console.error("Erreur suppression produit :", error);
+
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Une erreur est survenue pendant la suppression."
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
-  // =====================================================
-  // PUBLIER OU MASQUER UN PRODUIT
-  // =====================================================
+  /* =======================================================
+     PUBLIER / MASQUER UN PRODUIT
+  ======================================================= */
 
   async function toggleProduct(product: Product) {
+    setLoading(true);
+    setMessage("");
+    setErrorMessage("");
+
     try {
       const response = await fetch(
-        `/api/admin/products/${product.id}`,
+        `/api/admin/products/${encodeURIComponent(product.id)}`,
         {
           method: "PATCH",
           headers: {
@@ -401,400 +632,478 @@ export default function AdminProduitsPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(
-          data.error || "Modification impossible."
+        throw new Error(
+          data.error || "Impossible de modifier la visibilité."
         );
-        return;
       }
 
-      setMessage(
+      showMessage(
         product.active
-          ? "Produit masqué."
-          : "Produit publié."
+          ? "Produit masqué de la boutique."
+          : "Produit publié dans la boutique."
       );
 
       await loadProducts();
-    } catch {
-      setMessage("Erreur pendant la modification.");
+    } catch (error) {
+      console.error("Erreur visibilité produit :", error);
+
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Impossible de modifier la visibilité du produit."
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
-  // =====================================================
-  // PAGE DE CONNEXION
-  // =====================================================
+  /* =======================================================
+     RECHERCHE
+  ======================================================= */
+
+  const filteredProducts = products.filter((product) => {
+    const query = search.toLowerCase().trim();
+
+    if (!query) return true;
+
+    return (
+      product.name.toLowerCase().includes(query) ||
+      product.slug?.toLowerCase().includes(query) ||
+      product.description?.toLowerCase().includes(query)
+    );
+  });
+
+  const publishedCount = products.filter(
+    (product) => product.active
+  ).length;
+
+  const hiddenCount = products.length - publishedCount;
+
+  /* =======================================================
+     INTERFACE : CONNEXION
+  ======================================================= */
 
   if (!connected) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#F1F8F2] px-4 py-8">
-        <form
-          onSubmit={login}
-          className="w-full max-w-sm rounded-2xl border border-[#CFE3D1] bg-white p-6 shadow-sm"
-        >
-          <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[#2E7D32] text-3xl font-bold text-white">
-              BG
-            </div>
+      <main className="flex min-h-screen items-center justify-center bg-green-50 px-4 py-12">
+        <div className="w-full max-w-md rounded-3xl border border-green-100 bg-white p-8 shadow-xl">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-green-100 text-3xl font-bold text-green-800">
+            BG
+          </div>
 
-            <h1 className="text-2xl font-bold text-[#1B5E20]">
-              Espace privé Gnilane
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-green-900">
+              Espace administrateur
             </h1>
 
             <p className="mt-2 text-sm text-gray-500">
-              Administration de Beauté Bio
+              Beauté Bio by Gnilane
+            </p>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Connectez-vous pour gérer vos produits.
             </p>
           </div>
 
-          <label className={labelClass}>
-            Code administrateur
-          </label>
-
-          <input
-            type="password"
-            inputMode="numeric"
-            maxLength={6}
-            value={pin}
-            onChange={(e) =>
-              setPin(
-                e.target.value.replace(/\D/g, "").slice(0, 6)
-              )
-            }
-            placeholder="Code PIN"
-            className={`${inputClass} text-center text-xl tracking-[0.4em]`}
-            required
-          />
-
-          {message && (
-            <p className="mt-4 rounded-lg bg-red-50 p-3 text-center text-sm text-red-600">
-              {message}
-            </p>
+          {errorMessage && (
+            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {errorMessage}
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading || pin.length !== 6}
-            className="mt-5 min-h-[52px] w-full rounded-xl bg-[#2E7D32] px-4 text-base font-bold text-white active:bg-[#1B5E20] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loading ? "Connexion..." : "Se connecter"}
-          </button>
-        </form>
+          <form onSubmit={login} className="mt-7 space-y-5">
+            <div>
+              <label className={labelStyle}>
+                Code administrateur
+              </label>
+
+              <input
+                type="password"
+                value={pin}
+                onChange={(event) => setPin(event.target.value)}
+                placeholder="Saisissez votre code"
+                className={inputStyle}
+                autoComplete="current-password"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`${buttonPrimary} w-full`}
+            >
+              {loading ? "Connexion..." : "Se connecter"}
+            </button>
+          </form>
+        </div>
       </main>
     );
   }
 
-  // =====================================================
-  // TABLEAU DE BORD
-  // =====================================================
+  /* =======================================================
+     INTERFACE : TABLEAU DE BORD
+  ======================================================= */
 
   return (
-    <main className="min-h-screen bg-[#F1F8F2] px-3 py-4 sm:px-6 md:py-8">
-      <div className="mx-auto max-w-5xl">
-
+    <main className="min-h-screen bg-green-50 px-4 py-8 sm:px-6 lg:px-10">
+      <div className="mx-auto max-w-7xl">
         {/* EN-TÊTE */}
 
-        <header className="mb-4 flex flex-col gap-4 rounded-2xl bg-[#2E7D32] p-5 text-white sm:flex-row sm:items-center sm:justify-between">
+        <header className="mb-8 flex flex-col gap-4 rounded-3xl bg-gradient-to-r from-green-900 to-green-700 p-6 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between sm:p-8">
           <div>
-            <p className="text-xs font-semibold text-[#C8E6C9]">
-              Beauté Bio by Gnilane
+            <p className="text-sm font-medium text-green-100">
+              BEAUTÉ BIO BY GNILANE
             </p>
 
-            <h1 className="mt-1 text-2xl font-bold sm:text-3xl">
-              Administration
+            <h1 className="mt-2 text-2xl font-bold sm:text-3xl">
+              Gestion des produits
             </h1>
 
-            <p className="mt-1 text-sm text-[#E8F5E9]">
-              Gérez votre catalogue de produits.
+            <p className="mt-2 text-sm text-green-100">
+              Gérez votre catalogue, vos photos et la disponibilité de vos produits.
             </p>
           </div>
 
-          <a
-            href="/produits"
-            className="flex min-h-[48px] items-center justify-center rounded-xl bg-white px-6 text-base font-bold text-[#1B5E20] active:bg-[#E8F5E9]"
+          <button
+            type="button"
+            onClick={() => void loadProducts()}
+            disabled={loadingProducts}
+            className="rounded-xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/20 disabled:opacity-50"
           >
-            Voir la boutique
-          </a>
+            {loadingProducts ? "Actualisation..." : "Actualiser"}
+          </button>
         </header>
 
-        {/* MESSAGE */}
+        {/* NOTIFICATIONS */}
 
         {message && (
-          <div className="mb-4 rounded-xl border border-[#A5D6A7] bg-white p-4 text-sm font-semibold text-[#1B5E20]">
+          <div className="mb-6 rounded-xl border border-green-200 bg-green-100 px-4 py-3 text-sm font-medium text-green-900">
             {message}
           </div>
         )}
 
-        {/* FORMULAIRE */}
+        {errorMessage && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {errorMessage}
+          </div>
+        )}
 
-        <section className="mb-4 rounded-2xl border border-[#CFE3D1] bg-white p-4 sm:p-6">
+        {/* STATISTIQUES */}
 
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xl font-bold text-[#1B5E20]">
-              {editingId
-                ? "Modifier le produit"
-                : "Ajouter un produit"}
-            </h2>
+        <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-green-100 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">
+              Total des produits
+            </p>
 
-            <span className="rounded-full bg-[#E8F5E9] px-3 py-1 text-xs font-bold text-[#2E7D32]">
-              {editingId ? "Modification" : "Nouveau produit"}
-            </span>
+            <p className="mt-2 text-3xl font-bold text-green-900">
+              {products.length}
+            </p>
           </div>
 
-          <form
-            onSubmit={saveProduct}
-            className="grid gap-4 md:grid-cols-2"
-          >
+          <div className="rounded-2xl border border-green-100 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">
+              Produits publiés
+            </p>
 
-            {/* NOM */}
+            <p className="mt-2 text-3xl font-bold text-green-700">
+              {publishedCount}
+            </p>
+          </div>
 
+          <div className="rounded-2xl border border-green-100 bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">
+              Produits masqués
+            </p>
+
+            <p className="mt-2 text-3xl font-bold text-orange-600">
+              {hiddenCount}
+            </p>
+          </div>
+        </section>
+
+        {/* FORMULAIRE */}
+
+        <section className="mb-10 rounded-3xl border border-green-100 bg-white p-5 shadow-sm sm:p-8">
+          <div className="mb-7 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <label className={labelClass}>
-                Nom du produit
-              </label>
+              <h2 className="text-xl font-bold text-green-900">
+                {editingId ? "Modifier le produit" : "Ajouter un produit"}
+              </h2>
 
-              <input
-                required
-                value={form.name}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    name: e.target.value,
-                  })
-                }
-                className={inputClass}
-              />
-            </div>
-
-            {/* SLUG */}
-
-            <div>
-              <label className={labelClass}>
-                Rappel produit
-              </label>
-
-              <input
-                required
-                value={form.slug}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    slug: e.target.value,
-                  })
-                }
-                className={inputClass}
-              />
-            </div>
-
-            {/* PRIX */}
-
-            <div>
-              <label className={labelClass}>
-                Prix (FCFA)
-              </label>
-
-              <input
-                required
-                type="number"
-                inputMode="numeric"
-                min="0"
-                value={form.price}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    price: e.target.value,
-                  })
-                }
-                className={`${inputClass} ${noSpinClass}`}
-              />
-            </div>
-
-            {/* STOCK */}
-
-            <div>
-              <label className={labelClass}>
-                Quantité en stock
-              </label>
-
-              <input
-                required
-                type="number"
-                inputMode="numeric"
-                min="0"
-                value={form.stock}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    stock: e.target.value,
-                  })
-                }
-                className={`${inputClass} ${noSpinClass}`}
-              />
-            </div>
-
-            {/* CATÉGORIE */}
-
-            <div className="md:col-span-2">
-              <label className={labelClass}>
-                Catégorie
-              </label>
-
-              <select
-                value={form.category_id}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    category_id: e.target.value,
-                  })
-                }
-                className={inputClass}
-              >
-                <option value="">
-                  Choisir une catégorie
-                </option>
-
-                {categories.map((category) => (
-                  <option
-                    key={category.id}
-                    value={category.id}
-                  >
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* PHOTO */}
-
-            <div className="rounded-xl border-2 border-dashed border-[#A5D6A7] bg-[#F1F8F2] p-4 md:col-span-2">
-
-              <label className={labelClass}>
-                Photo du produit
-              </label>
-
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                onChange={uploadImage}
-                disabled={uploadingImage}
-                className="w-full cursor-pointer text-sm text-gray-600 file:mr-3 file:min-h-[44px] file:rounded-lg file:border-0 file:bg-[#2E7D32] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
-              />
-
-              <p className="mt-2 text-xs text-gray-500">
-                JPG, PNG, WEBP ou GIF · 5 Mo maximum
+              <p className="mt-1 text-sm text-gray-500">
+                Remplissez les informations de votre produit.
               </p>
+            </div>
 
-              {uploadingImage && (
-                <div className="mt-3 rounded-xl bg-white p-3">
-                  <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#1B5E20]">
-                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-[#C8E6C9] border-t-[#2E7D32]" />
-                    Envoi de la photo...
-                  </div>
+            {editingId && (
+              <span className="w-fit rounded-full bg-orange-100 px-4 py-2 text-xs font-bold text-orange-800">
+                MODE MODIFICATION
+              </span>
+            )}
+          </div>
 
-                  <div className="h-2 overflow-hidden rounded-full bg-[#E8F5E9]">
-                    <div className="h-full w-1/2 rounded-full bg-[#2E7D32]" />
-                  </div>
-                </div>
-              )}
+          <form onSubmit={saveProduct} className="space-y-6">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {/* NOM */}
 
-              {/* APERÇU PHOTO */}
+              <div>
+                <label className={labelStyle}>
+                  Nom du produit *
+                </label>
 
-              {imagePreview && (
-                <div className="mt-4 rounded-xl bg-white p-3">
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(event) => {
+                    const name = event.target.value;
 
-                  <p className="mb-3 text-sm font-bold text-[#1B5E20]">
-                    Aperçu de votre photo
+                    setForm((previous) => ({
+                      ...previous,
+                      name,
+                      slug: previous.slug
+                        ? previous.slug
+                        : createSlug(name),
+                    }));
+                  }}
+                  placeholder="Exemple : Savon naturel au Mbeurbeuff"
+                  className={inputStyle}
+                  required
+                />
+              </div>
+
+              {/* SLUG */}
+
+              <div>
+                <label className={labelStyle}>
+                  Identifiant URL
+                </label>
+
+                <input
+                  type="text"
+                  value={form.slug}
+                  onChange={(event) =>
+                    updateForm("slug", createSlug(event.target.value))
+                  }
+                  placeholder="savon-naturel"
+                  className={inputStyle}
+                />
+              </div>
+
+              {/* PRIX */}
+
+              <div>
+                <label className={labelStyle}>
+                  Prix (FCFA) *
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.price}
+                  onChange={(event) =>
+                    updateForm("price", event.target.value)
+                  }
+                  placeholder="1500"
+                  className={inputStyle}
+                  required
+                />
+              </div>
+
+              {/* STOCK */}
+
+              <div>
+                <label className={labelStyle}>
+                  Quantité en stock *
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.stock}
+                  onChange={(event) =>
+                    updateForm("stock", event.target.value)
+                  }
+                  placeholder="10"
+                  className={inputStyle}
+                  required
+                />
+              </div>
+
+              {/* CATÉGORIE */}
+
+              <div>
+                <label className={labelStyle}>
+                  Catégorie
+                </label>
+
+                <select
+                  value={form.category_id}
+                  onChange={(event) =>
+                    updateForm("category_id", event.target.value)
+                  }
+                  className={inputStyle}
+                >
+                  <option value="">
+                    Sélectionner une catégorie
+                  </option>
+
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+
+                {categories.length === 0 && (
+                  <p className="mt-2 text-xs text-orange-600">
+                    Aucune catégorie disponible ou retournée par l'API.
                   </p>
+                )}
+              </div>
 
-                  <div className="flex flex-wrap items-center gap-4">
+              {/* VISIBILITÉ */}
 
-                    <img
-                      src={imagePreview}
-                      alt="Aperçu du produit"
-                      className="h-28 w-28 rounded-xl border border-[#CFE3D1] object-cover"
-                    />
+              <div>
+                <label className={labelStyle}>
+                  Visibilité dans la boutique
+                </label>
 
-                    <div className="min-w-0 flex-1">
+                <select
+                  value={form.active ? "true" : "false"}
+                  onChange={(event) =>
+                    updateForm("active", event.target.value === "true")
+                  }
+                  className={inputStyle}
+                >
+                  <option value="true">
+                    Publié
+                  </option>
 
-                      <p className="text-sm font-semibold text-[#2E7D32]">
-                        {form.image_url
-                          ? "Photo enregistrée sur Supabase"
-                          : "Aperçu local : envoi à effectuer"}
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setForm((previous) => ({
-                            ...previous,
-                            image_url: "",
-                          }));
-
-                          setImagePreview("");
-                          setMessage("Photo retirée.");
-                        }}
-                        className="mt-3 min-h-[44px] rounded-lg bg-red-50 px-4 text-sm font-semibold text-red-600 active:bg-red-100"
-                      >
-                        Retirer la photo
-                      </button>
-
-                    </div>
-                  </div>
-                </div>
-              )}
-
+                  <option value="false">
+                    Masqué
+                  </option>
+                </select>
+              </div>
             </div>
 
             {/* DESCRIPTION */}
 
-            <div className="md:col-span-2">
-
-              <label className={labelClass}>
+            <div>
+              <label className={labelStyle}>
                 Description du produit
               </label>
 
               <textarea
-                rows={4}
-                placeholder="Présentez votre produit..."
                 value={form.description}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    description: e.target.value,
-                  })
+                onChange={(event) =>
+                  updateForm("description", event.target.value)
                 }
-                className={`${inputClass} resize-y`}
+                placeholder="Décrivez les bienfaits et les caractéristiques du produit..."
+                rows={4}
+                className={inputStyle}
               />
-
             </div>
 
-            {/* VISIBILITÉ */}
+            {/* IMAGE */}
 
-            <label className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl bg-[#E8F5E9] p-4 md:col-span-2">
+            <div>
+              <label className={labelStyle}>
+                Photo du produit
+              </label>
 
-              <input
-                type="checkbox"
-                checked={form.active}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    active: e.target.checked,
-                  })
-                }
-                className="h-6 w-6 accent-[#2E7D32]"
-              />
+              <div className="rounded-2xl border-2 border-dashed border-green-200 bg-green-50/50 p-5">
+                {imagePreview ? (
+                  <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                    <div className="flex h-40 w-40 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-green-100 bg-white">
+                      <img
+                        src={imagePreview}
+                        alt="Aperçu du produit"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
 
-              <span className="font-semibold text-[#1B5E20]">
-                Produit visible dans la boutique
-              </span>
+                    <div className="space-y-3">
+                      <p className="text-sm font-semibold text-green-900">
+                        Photo sélectionnée
+                      </p>
 
-            </label>
+                      <p className="max-w-md break-all text-xs text-gray-500">
+                        {form.image_url || "Photo en cours de retrait"}
+                      </p>
 
-            {/* BOUTONS */}
+                      <div className="flex flex-wrap gap-3">
+                        <label
+                          className={`${buttonSecondary} cursor-pointer`}
+                        >
+                          {uploadingImage
+                            ? "Téléchargement..."
+                            : "Changer la photo"}
 
-            <div className="flex flex-col gap-3 sm:flex-row md:col-span-2">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            onChange={uploadImage}
+                            disabled={uploadingImage || deletingPhoto}
+                            className="hidden"
+                          />
+                        </label>
 
+                        <button
+                          type="button"
+                          onClick={removePhoto}
+                          disabled={deletingPhoto || uploadingImage}
+                          className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {deletingPhoto
+                            ? "Suppression..."
+                            : "Retirer la photo"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-5 text-center">
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-2xl">
+                      +
+                    </div>
+
+                    <p className="font-semibold text-green-900">
+                      Ajouter une photo
+                    </p>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                      JPG, PNG, WEBP ou GIF — 5 Mo maximum
+                    </p>
+
+                    <label className="mt-5 inline-flex cursor-pointer items-center justify-center rounded-xl bg-green-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-800">
+                      {uploadingImage
+                        ? "Téléchargement..."
+                        : "Choisir une image"}
+
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        onChange={uploadImage}
+                        disabled={uploadingImage || deletingPhoto}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ACTIONS FORMULAIRE */}
+
+            <div className="flex flex-col gap-3 border-t border-green-100 pt-6 sm:flex-row">
               <button
                 type="submit"
-                disabled={loading || uploadingImage}
-                className="min-h-[52px] rounded-xl bg-[#2E7D32] px-7 text-base font-bold text-white active:bg-[#1B5E20] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={loading || uploadingImage || deletingPhoto}
+                className={`${buttonPrimary} flex-1`}
               >
                 {loading
                   ? "Enregistrement..."
@@ -806,150 +1115,161 @@ export default function AdminProduitsPage() {
               {editingId && (
                 <button
                   type="button"
-                  onClick={cancelEditing}
-                  className="min-h-[52px] rounded-xl border border-gray-300 bg-white px-6 text-base font-semibold text-gray-600 active:bg-gray-100"
+                  onClick={resetForm}
+                  disabled={loading || deletingPhoto}
+                  className={buttonSecondary}
                 >
-                  Annuler
+                  Annuler la modification
                 </button>
               )}
-
             </div>
-
           </form>
         </section>
 
-        {/* CATALOGUE */}
+        {/* LISTE DES PRODUITS */}
 
-        <section className="rounded-2xl border border-[#CFE3D1] bg-white p-4 sm:p-6">
+        <section className="rounded-3xl border border-green-100 bg-white p-5 shadow-sm sm:p-8">
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-green-900">
+                Tous les produits
+              </h2>
 
-          <div className="mb-5 flex items-center justify-between gap-3">
-
-            <h2 className="text-xl font-bold text-[#1B5E20]">
-              Catalogue des produits
-            </h2>
-
-            <div className="rounded-xl bg-[#E8F5E9] px-4 py-2 text-center">
-              <p className="text-2xl font-bold leading-none text-[#2E7D32]">
-                {products.length}
-              </p>
-
-              <p className="mt-1 text-xs font-semibold text-[#1B5E20]">
-                Produits
+              <p className="mt-1 text-sm text-gray-500">
+                Modifiez, publiez, masquez ou supprimez vos produits.
               </p>
             </div>
 
+            <div className="w-full sm:max-w-xs">
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Rechercher un produit..."
+                className={inputStyle}
+              />
+            </div>
           </div>
 
-          {products.length === 0 && (
-            <div className="rounded-xl bg-[#F1F8F2] p-8 text-center">
+          {loadingProducts ? (
+            <div className="py-12 text-center">
+              <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-green-200 border-t-green-700" />
 
-              <p className="text-lg font-bold text-[#1B5E20]">
-                Aucun produit enregistré
+              <p className="mt-4 text-sm text-gray-500">
+                Chargement des produits...
+              </p>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="rounded-2xl bg-green-50 px-5 py-12 text-center">
+              <p className="text-lg font-semibold text-green-900">
+                Aucun produit trouvé
               </p>
 
               <p className="mt-2 text-sm text-gray-500">
-                Ajoutez votre premier produit avec le formulaire ci-dessus.
+                {search
+                  ? "Essayez une autre recherche."
+                  : "Ajoutez votre premier produit pour commencer."}
               </p>
-
             </div>
-          )}
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredProducts.map((product) => (
+                <article
+                  key={product.id}
+                  className="overflow-hidden rounded-2xl border border-green-100 bg-white transition hover:-translate-y-1 hover:shadow-lg"
+                >
+                  {/* PHOTO */}
 
-          <div className="grid gap-4 md:grid-cols-2">
+                  <div className="relative h-52 bg-green-50">
+                    {product.image_url ? (
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <div className="text-center">
+                          <div className="text-4xl">BG</div>
 
-            {products.map((product) => (
-              <article
-                key={product.id}
-                className="flex flex-col gap-3 rounded-xl border border-[#CFE3D1] bg-white p-3 sm:flex-row"
-              >
+                          <p className="mt-2 text-xs text-green-800">
+                            Aucune photo
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
-                {/* IMAGE */}
-
-                <div className="h-44 w-full flex-shrink-0 overflow-hidden rounded-lg bg-[#F1F8F2] sm:h-28 sm:w-28">
-
-                  {product.image_url ? (
-                    <img
-                      src={product.image_url}
-                      alt={product.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-gray-400">
-                      Sans photo
-                    </div>
-                  )}
-
-                </div>
-
-                {/* INFORMATIONS */}
-
-                <div className="min-w-0 flex-1">
-
-                  <h3 className="break-words text-lg font-bold text-[#1B5E20]">
-                    {product.name}
-                  </h3>
-
-                  <p className="mt-1 font-bold text-[#2E7D32]">
-                    {Number(product.price).toLocaleString("fr-FR")} FCFA
-                  </p>
-
-                  <p className="mt-1 text-sm text-gray-500">
-                    Stock : {product.stock}
-                  </p>
-
-                  <span
-                    className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-bold ${product.active
-                      ? "bg-[#E8F5E9] text-[#2E7D32]"
-                      : "bg-gray-100 text-gray-600"
-                      }`}
-                  >
-                    {product.active ? "Publié" : "Masqué"}
-                  </span>
-
-                  {/* ACTIONS */}
-
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-
-                    <button
-                      type="button"
-                      onClick={() => editProduct(product)}
-                      className="min-h-[44px] rounded-lg bg-[#2E7D32] px-2 text-sm font-semibold text-white active:bg-[#1B5E20]"
+                    <span
+                      className={`absolute right-3 top-3 rounded-full px-3 py-1 text-xs font-bold ${product.active
+                          ? "bg-green-100 text-green-800"
+                          : "bg-orange-100 text-orange-800"
+                        }`}
                     >
-                      Modifier
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => toggleProduct(product)}
-                      className="min-h-[44px] rounded-lg bg-[#E8F5E9] px-2 text-sm font-semibold text-[#1B5E20] active:bg-[#C8E6C9]"
-                    >
-                      {product.active ? "Masquer" : "Publier"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => deleteProduct(product.id)}
-                      className="min-h-[44px] rounded-lg bg-red-50 px-2 text-sm font-semibold text-red-600 active:bg-red-100"
-                    >
-                      Supprimer
-                    </button>
-
+                      {product.active ? "Publié" : "Masqué"}
+                    </span>
                   </div>
 
-                </div>
+                  {/* INFORMATIONS */}
 
-              </article>
-            ))}
+                  <div className="p-5">
+                    <h3 className="line-clamp-1 text-lg font-bold text-gray-900">
+                      {product.name}
+                    </h3>
 
-          </div>
+                    <p className="mt-2 line-clamp-2 min-h-10 text-sm text-gray-500">
+                      {product.description || "Aucune description."}
+                    </p>
 
+                    <div className="mt-4 flex items-center justify-between">
+                      <p className="text-lg font-bold text-green-800">
+                        {Number(product.price).toLocaleString("fr-FR")} FCFA
+                      </p>
+
+                      <span className="rounded-lg bg-green-50 px-3 py-1 text-xs font-semibold text-green-800">
+                        Stock : {product.stock}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => editProduct(product)}
+                        disabled={loading}
+                        className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-800 transition hover:bg-green-100 disabled:opacity-50"
+                      >
+                        Modifier
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void toggleProduct(product)}
+                        disabled={loading}
+                        className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-800 transition hover:bg-orange-100 disabled:opacity-50"
+                      >
+                        {product.active ? "Masquer" : "Publier"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void deleteProduct(product)}
+                        disabled={loading}
+                        className="col-span-2 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Supprimer le produit
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* PIED DE PAGE */}
 
-        <footer className="mt-6 pb-4 text-center text-xs text-gray-500">
-          Beauté Bio by Gnilane · Administration sécurisée
+        <footer className="py-8 text-center text-xs text-gray-500">
+          Beauté Bio by Gnilane — Espace de gestion sécurisé
         </footer>
-
       </div>
     </main>
   );

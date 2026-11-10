@@ -1030,13 +1030,7 @@ export default function HomePage() {
             </h1>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <Link
-                href="/produits"
-                className="bg-btn group inline-flex items-center justify-center gap-3 rounded-full bg-[#2D6A4F] px-7 py-3.5 text-sm font-bold text-white shadow-xl shadow-[#2D6A4F]/25 transition duration-300 hover:-translate-y-1 hover:bg-[#1B4332] hover:shadow-2xl active:scale-95"
-              >
-                Découvrir la boutique
-                <span className="bg-arrow">→</span>
-              </Link>
+
 
               <a
                 href={WHATSAPP_URL}
